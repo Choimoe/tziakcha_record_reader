@@ -52,6 +52,7 @@ class MahjongRecordParser:
         self.packs_output = [[] for _ in range(4)]
         self.discards = [[] for _ in range(4)]
         self.flower_counts = [0] * 4
+        self.flower_tile = [[] for _ in range(4)]
         self.initial_hands = [[] for _ in range(4)]
 
         self.win_info = None
@@ -156,8 +157,11 @@ class MahjongRecordParser:
 
         # print("\n--- 对局过程 ---")
         prev_time = 0
+        total_action_num = len(self.actions)
+        act_cnt = 0
 
         for act in self.actions:
+            act_cnt += 1
             p_idx, a_type, data, time = act['p'], act['a'], act['d'], act['t']
             player_info = f"{self.WIND[p_idx]}家 {self.script_data['p'][p_idx]['n']}"
             time_str = f"[{((time - prev_time) / 1000.0):.3f}s]"
@@ -170,6 +174,7 @@ class MahjongRecordParser:
             elif a_type == 1:
                 self.flower_counts[p_idx] += 1
                 ot = (hi_byte & 15) + 136
+                self.flower_tile[p_idx].append(self.get_tile_str(ot))
                 # print(self.hands[p_idx])
                 # print(ot)
                 self.hands[p_idx].remove(ot)
@@ -189,6 +194,8 @@ class MahjongRecordParser:
                 tile_val = (data & 0x3F) << 2
                 offer_from_idx = (p_idx + ((data >> 6) & 3)) % 4
                 self.current_player_idx = p_idx
+                if data == 0:
+                    continue
 
                 if pack_type == "CHI":
                     offer_tile = self.last_discard_info['tile']
@@ -217,7 +224,7 @@ class MahjongRecordParser:
                             chi_shape.append(self.get_tile_str(chi_tiles[t]))
                     self.packs[p_idx].append(("CHI", self.get_tile_GB_str(tile_val), chi_id))
                     self.packs_output[p_idx].append(chi_shape)
-                    print(self.packs_output[p_idx])
+                    # print(self.packs_output[p_idx])
                     output += f"吃 {self.get_tile_str(offer_tile)}"
                 elif pack_type == "PENG":
                     count = 0
@@ -251,7 +258,7 @@ class MahjongRecordParser:
                             if (t >> 2) == (tile_val >> 2) and count < 4:
                                 self.hands[p_idx].remove(t)
                                 count += 1
-                        print([self.get_tile_str(t) for t in self.hands[p_idx]])
+                        # print([self.get_tile_str(t) for t in self.hands[p_idx]])
                         self.packs[p_idx].append(("GANG", self.get_tile_GB_str(tile_val), 0))
                         self.packs_output[p_idx].append([self.get_tile_str(tile_val) for _ in range(4)])
                     else:  # Melded
@@ -267,6 +274,10 @@ class MahjongRecordParser:
                     output += f"{action} {self.get_tile_str(tile_val)}"
                 # self.discards[offer_from_idx].pop()
             elif a_type == 6:
+                if data == 0:
+                    continue
+                if act_cnt != total_action_num:
+                    continue
                 is_self_drawn = p_idx == self.current_player_idx
                 win_tile = self.hands[p_idx][-1] if is_self_drawn else self.last_discard_info['tile']
                 self.win_info = {'winner': p_idx, 'win_tile': win_tile, 'is_self_drawn': is_self_drawn}
@@ -284,10 +295,14 @@ class MahjongRecordParser:
                 output += "过"
             elif a_type == 9:
                 output += "弃"
-            print(f"{output} {time_str}")
-            hand = [self.get_tile_str(t) for t in self.hands[p_idx]]
-            hand.sort()
-            print(hand)
+            
+            self.hands[p_idx].sort()
+            detail_debug = 1
+            if detail_debug:
+                hand_str = ' '.join([self.get_tile_str(t) for t in self.hands[p_idx]])
+                packs_str = ' '.join([f"[{''.join(p)}]" for p in self.packs_output[p_idx]])
+                print(f"{output} {time_str}")
+                print(f"{self.WIND[p_idx]}家 {self.script_data['p'][p_idx]['n']}: {hand_str}  {packs_str}")
             prev_time = time
 
         print("\n--- 最终结果 ---")
@@ -359,7 +374,11 @@ class MahjongRecordParser:
         try:
             fans = MahjongFanCalculator(**calculator_args)
             total_fan = sum(f[0] * f[1] for f in fans)
-            print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']} 和牌! 总计: {total_fan}番")
+            if self.flower_counts[w_idx] > 0:
+                flower_str = '花牌：' + ' '.join(self.flower_tile[w_idx])
+            else:
+                flower_str = '无花牌'
+            print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']} 和牌! 总计: {total_fan}番，{flower_str}")
             for fan_points, count, fan_name_cn, fan_name_en in fans:
                 print(f"  {fan_name_cn}: {fan_points}番" + (f" x{count}" if count > 1 else ""))
         except Exception as e:
