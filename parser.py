@@ -242,6 +242,7 @@ class MahjongRecordParser:
                     if action == "加杠":
                         # self.hands[p_idx].remove(tile_val)
                         hand_copy = list(self.hands[p_idx])
+                        self.last_discard_info = {'tile': tile_val, 'player': p_idx}
                         for t in hand_copy:
                             if (t >> 2) == (tile_val >> 2):
                                 self.hands[p_idx].remove(t)
@@ -297,7 +298,7 @@ class MahjongRecordParser:
                 output += "弃"
             
             self.hands[p_idx].sort()
-            detail_debug = 1
+            detail_debug = 0
             if detail_debug:
                 hand_str = ' '.join([self.get_tile_str(t) for t in self.hands[p_idx]])
                 packs_str = ' '.join([f"[{''.join(p)}]" for p in self.packs_output[p_idx]])
@@ -316,12 +317,12 @@ class MahjongRecordParser:
         #     discard_str = ' '.join([self.get_tile_str(t) for t in self.discards[i]])
         #     print(f"{self.WIND[i]}家 {self.script_data['p'][i]['n']}: {discard_str}")
 
-        print("\n--- 最终手牌 ---")
-        for i in range(4):
-            self.hands[i].sort()
-            hand_str = ' '.join([self.get_tile_str(t) for t in self.hands[i]])
-            packs_str = ' '.join([f"[{''.join(p)}]" for p in self.packs_output[i]])
-            print(f"{self.WIND[i]}家 {self.script_data['p'][i]['n']}: {hand_str}  {packs_str}")
+        # print("\n--- 最终手牌 ---")
+        # for i in range(4):
+        #     self.hands[i].sort()
+        #     hand_str = ' '.join([self.get_tile_str(t) for t in self.hands[i]])
+        #     packs_str = ' '.join([f"[{''.join(p)}]" for p in self.packs_output[i]])
+        #     print(f"{self.WIND[i]}家 {self.script_data['p'][i]['n']}: {hand_str}  {packs_str}")
 
     def _calculate_fan(self):
         if not MAHJONG_GB_AVAILABLE:
@@ -375,10 +376,15 @@ class MahjongRecordParser:
             fans = MahjongFanCalculator(**calculator_args)
             total_fan = sum(f[0] * f[1] for f in fans)
             if self.flower_counts[w_idx] > 0:
-                flower_str = '花牌：' + ' '.join(self.flower_tile[w_idx])
+                flower_str = '+ 花牌x' + str(self.flower_counts[w_idx]) + ': ' + ' '.join(self.flower_tile[w_idx])
             else:
                 flower_str = '无花牌'
-            print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']} 和牌! 总计: {total_fan}番，{flower_str}")
+            self.hands[w_idx].sort()
+            hand_str = ' '.join([self.get_tile_str(t) for t in self.hands[w_idx]])
+            packs_str = ' '.join([f"[{''.join(p)}]" for p in self.packs_output[w_idx]])
+            print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']}: {hand_str} {packs_str}")
+
+            print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']} 和牌! 总计: {total_fan}番 ({flower_str})")
             for fan_points, count, fan_name_cn, fan_name_en in fans:
                 print(f"  {fan_name_cn}: {fan_points}番" + (f" x{count}" if count > 1 else ""))
         except Exception as e:

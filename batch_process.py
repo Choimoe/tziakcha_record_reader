@@ -79,7 +79,7 @@ def main():
     fail_cnt = 0
 
     for i, record_id in enumerate(record_ids, start=1):
-        print(f"[{i}/{len(record_ids)}] Processing record: {record_id}")
+        print(f"\n\n[{i}/{len(record_ids)}] Processing record: https://tziakcha.net/record/?id={record_id}")
 
         # 检查是否已存在本地 origin 文件
         origin_file = os.path.join("data", "origin", f"{record_id}.json")
@@ -97,13 +97,13 @@ def main():
         
         try:
             process_record(record_id)
-            print(f"  ✅ Processed successfully.\n")
+            # print(f"  ✅ Processed successfully.\n")
             suc_cnt += 1
         except Exception as e:
             print(f"  ❌ Error during processing {record_id}: {e}\n")
             fail_cnt += 1
 
-    print("✅ Batch processing completed.")
+    # print("✅ Batch processing completed.")
     print(f"  Successfully processed: {suc_cnt}")
     print(f"  Failed to process: {fail_cnt}")
 
