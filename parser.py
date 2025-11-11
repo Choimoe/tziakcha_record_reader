@@ -4,12 +4,7 @@ import zlib
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 
-try:
-    from MahjongGB import MahjongFanCalculator
 
-    MAHJONG_GB_AVAILABLE = True
-except ImportError:
-    MAHJONG_GB_AVAILABLE = False
 
 
 def prev_tile(index: int) -> int:
@@ -306,11 +301,12 @@ class MahjongRecordParser:
                 print(f"{self.WIND[p_idx]}家 {self.script_data['p'][p_idx]['n']}: {hand_str}  {packs_str}")
             prev_time = time
 
-        print("\n--- 最终结果 ---")
+        # print("\n--- 最终结果 ---")
         if not self.win_info:
-            print("对局为荒庄")
+            # print("对局为荒庄")
+            pass
         else:
-            self._calculate_fan()
+            self._print_fan_info()
 
         # print("\n--- 各家舍牌 ---")
         # for i in range(4):
@@ -324,68 +320,154 @@ class MahjongRecordParser:
         #     packs_str = ' '.join([f"[{''.join(p)}]" for p in self.packs_output[i]])
         #     print(f"{self.WIND[i]}家 {self.script_data['p'][i]['n']}: {hand_str}  {packs_str}")
 
-    def _calculate_fan(self):
-        if not MAHJONG_GB_AVAILABLE:
-            print("MahjongGB 库未安装，无法进行算番。请运行 'pip install MahjongGB'")
-            return
+    def _print_fan_info(self):
+        w_idx = self.win_info['winner']
+        win_data = self.script_data['y'][w_idx]
+        total_fan = win_data['f']
+        fan_details = win_data['t']
+
+        FAN_NAMES = ['无','大四喜','大三元','绿一色','九莲宝灯','四杠','连七对','十三幺','清幺九','小四喜','小三元','字一色','四暗刻','一色双龙会','一色四同顺','一色四节高','一色四步高','一色四连环','三杠','混幺九','七对','七星不靠','全双刻','清一色','一色三同顺','一色三节高','全大','全中','全小','清龙','三色双龙会','一色三步高','一色三连环','全带五','三同刻','三暗刻','全不靠','组合龙','大于五','小于五','三风刻','花龙','推不倒','三色三同顺','三色三节高','无番和','妙手回春','海底捞月','杠上开花','抢杠和','碰碰和','混一色','三色三步高','五门齐','全求人','双暗杠','双箭刻','全带幺','不求人','双明杠','和绝张','箭刻','圈风刻','门风刻','门前清','平和','四归一','双同刻','双暗刻','暗杠','断幺','一般高','喜相逢','连六','老少副','幺九刻','明杠','缺一门','无字','独听・边张','独听・嵌张','独听・单钓','自摸','花牌','明暗杠','\u203b 天和','\u203b 地和','\u203b 人和Ⅰ','\u203b 人和Ⅱ']
+
+        self.hands[w_idx].sort()
+        hand_str = ' '.join([self.get_tile_str(t) for t in self.hands[w_idx]])
+        packs_str = ' '.join([f"[{''.join(p)}]" for p in self.packs_output[w_idx]])
+        print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']}: {hand_str} {packs_str}")
+
+        calculated_fan_sum = 0
+        for fan_id_str, fan_val in fan_details.items():
+            fan_id = int(fan_id_str)
+            if fan_id == 83: continue # Skip flower tile for now
+            fan_points = fan_val & 0xFF
+            count = (fan_val >> 8) + 1
+            calculated_fan_sum += fan_points * count
+
+        flower_count = total_fan - calculated_fan_sum
+        
+        assert flower_count == self.flower_counts[w_idx], f"计算花牌数({flower_count})与实际花牌数({self.flower_counts[w_idx]})不符"
+
+        if flower_count > 0:
+            flower_str = f'花牌x{flower_count}: ' + ' '.join(self.flower_tile[w_idx])
+        else:
+            flower_str = '无花牌'
+
+        print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']} 和牌! 总计: {total_fan}番 ({flower_str})")
+        
+        for fan_id_str, fan_val in fan_details.items():
+            fan_id = int(fan_id_str)
+            if fan_id == 83: continue # Skip flower tile
+            fan_points = fan_val & 0xFF
+            count = (fan_val >> 8) + 1
+            fan_name = FAN_NAMES[fan_id] if 0 <= fan_id < len(FAN_NAMES) else f"未知番种({fan_id})"
+            print(f"  {fan_name}: {fan_points}番" + (f" x{count}" if count > 1 else ""))
+
+    def get_win_analysis(self):
+        if not self.win_info:
+            return None
 
         w_idx = self.win_info['winner']
-        win_tile_str = self.get_tile_GB_str(self.win_info['win_tile'])
+        win_data = self.script_data['y'][w_idx]
+        total_fan = win_data['f']
+        fan_details = win_data['t']
 
-        hand_tiles = [self.get_tile_GB_str(t) for t in self.hands[w_idx]]
-        if win_tile_str in hand_tiles:
-            hand_tiles.remove(win_tile_str)
+        FAN_NAMES = ['无','大四喜','大三元','绿一色','九莲宝灯','四杠','连七对','十三幺','清幺九','小四喜','小三元','字一色','四暗刻','一色双龙会','一色四同顺','一色四节高','一色四步高','一色四连环','三杠','混幺九','七对','七星不靠','全双刻','清一色','一色三同顺','一色三节高','全大','全中','全小','清龙','三色双龙会','一色三步高','一色三连环','全带五','三同刻','三暗刻','全不靠','组合龙','大于五','小于五','三风刻','花龙','推不倒','三色三同顺','三色三节高','无番和','妙手回春','海底捞月','杠上开花','抢杠和','碰碰和','混一色','三色三步高','五门齐','全求人','双暗杠','双箭刻','全带幺','不求人','双明杠','和绝张','箭刻','圈风刻','门风刻','门前清','平和','四归一','双同刻','双暗刻','暗杠','断幺','一般高','喜相逢','连六','老少副','幺九刻','明杠','缺一门','无字','独听・边张','独听・嵌张','独听・单钓','自摸','花牌','明暗杠','\u203b 天和','\u203b 地和','\u203b 人和Ⅰ','\u203b 人和Ⅱ']
+        
+        # Calculate base fan and flower count
+        calculated_fan_sum = 0
+        for fan_id_str, fan_val in fan_details.items():
+            fan_id = int(fan_id_str)
+            if fan_id == 83: continue
+            fan_points = fan_val & 0xFF
+            count = (fan_val >> 8) + 1
+            calculated_fan_sum += fan_points * count
+        
+        flower_count = total_fan - calculated_fan_sum
+        base_fan = calculated_fan_sum
 
-        all_tiles_revealed = []
-        for p_discard in self.discards:
-            all_tiles_revealed.extend([self.get_tile_str(t) for t in p_discard])
-        for p_packs in self.packs:
-            for p_type, p_tile_str, _ in p_packs:
-                if p_type == "PENG":
-                    all_tiles_revealed.extend([p_tile_str] * 2)
-                elif p_type == "GANG":
-                    all_tiles_revealed.extend([p_tile_str] * 3)
+        win_tile_str = self.get_tile_str(self.win_info['win_tile'])
+        game_title = self.script_data['g']['t']
 
-        all_tiles_revealed.sort()
-        # print(all_tiles_revealed)
-        # print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']} " + ("自摸：" if self.win_info['is_self_drawn'] else "点和：") + self.get_tile_str(self.win_info['win_tile']))
-        # print(all_tiles_revealed.count(self.get_tile_str(self.win_info['win_tile'])))
-        tiles_num = all_tiles_revealed.count(self.get_tile_str(self.win_info['win_tile']))
-        is_4th_tile = False
-        if tiles_num == 3 and self.win_info['is_self_drawn']:
-            is_4th_tile = True
-        if tiles_num == 4:
-            is_4th_tile = True
+        win_tile_str = self.get_tile_str(self.win_info['win_tile'])
+        game_title = self.script_data['g']['t']
 
-        calculator_args = {
-            'pack': tuple(self.packs[w_idx]),
-            'hand': tuple(hand_tiles),
-            'winTile': win_tile_str,
-            # 'flowerCount': self.flower_counts[w_idx],
-            'flowerCount': 0,
-            'isSelfDrawn': self.win_info['is_self_drawn'],
-            'is4thTile': is_4th_tile,
-            'isAboutKong': self.last_action_was_kong,
-            'isWallLast': self.wall_front_ptr > self.wall_back_ptr,
-            'seatWind': w_idx,
-            'prevalentWind': self.script_data['i'] // 4,
-            'verbose': True
+        # Format hand
+        hand_tiles_str = [self.get_tile_str(t) for t in self.hands[w_idx]]
+        
+        suits = {'m': [], 'p': [], 's': [], 'z': []}
+        for tile in hand_tiles_str:
+            num, suit_char = (tile[:-1], tile[-1]) if tile[:-1] else (tile[0], '')
+            if suit_char in suits:
+                suits[suit_char].append(num)
+            else: # Honor tiles
+                suits['z'].append(num)
+
+        formatted_hand_parts = []
+        for suit_char in ['m', 'p', 's', 'z']:
+            if suits[suit_char]:
+                nums_str = "".join(sorted(suits[suit_char]))
+                formatted_hand_parts.append(f"{nums_str}{suit_char if suit_char != 'z' else ''}")
+        
+        hand_str = ' '.join(formatted_hand_parts)
+        
+        packs_str_parts = []
+        for p in self.packs_output[w_idx]:
+            pack_hand_str = ''.join(p).replace('(', '').replace(')', '')
+            
+            pack_suits = {'m': [], 'p': [], 's': [], 'z': []}
+            for i in range(0, len(pack_hand_str), 2):
+                tile = pack_hand_str[i:i+2]
+                num, suit_char = (tile[:-1], tile[-1]) if tile[:-1] else (tile[0], '')
+                if suit_char in pack_suits:
+                    pack_suits[suit_char].append(num)
+                else:
+                    pack_suits['z'].append(num)
+
+            pack_part_str_parts = []
+            for suit_char in ['m', 'p', 's', 'z']:
+                if pack_suits[suit_char]:
+                    nums_str = "".join(sorted(pack_suits[suit_char]))
+                    pack_part_str_parts.append(f"{nums_str}{suit_char if suit_char != 'z' else ''}")
+            
+            packs_str_parts.append(f"[{' '.join(pack_part_str_parts)}]")
+
+        formatted_hand = f"{hand_str} {' '.join(packs_str_parts)}".strip()
+
+        # Fan vector
+        fan_vector = [0] * len(FAN_NAMES)
+        for fan_id_str, fan_val in fan_details.items():
+            fan_id = int(fan_id_str)
+            if 0 <= fan_id < len(FAN_NAMES):
+                count = (fan_val >> 8) + 1
+                fan_vector[fan_id] = count
+
+        return {
+            "winner_name": self.script_data['p'][w_idx]['n'],
+            "base_fan": base_fan,
+            "flower_count": flower_count,
+            "total_fan": total_fan,
+            "formatted_hand": formatted_hand,
+            "fan_vector": fan_vector,
+            "fan_names": FAN_NAMES,
+            "winning_tile": win_tile_str,
+            "game_title": game_title
         }
 
-        try:
-            fans = MahjongFanCalculator(**calculator_args)
-            total_fan = sum(f[0] * f[1] for f in fans)
-            if self.flower_counts[w_idx] > 0:
-                flower_str = '+ 花牌x' + str(self.flower_counts[w_idx]) + ': ' + ' '.join(self.flower_tile[w_idx])
-            else:
-                flower_str = '无花牌'
-            self.hands[w_idx].sort()
-            hand_str = ' '.join([self.get_tile_str(t) for t in self.hands[w_idx]])
-            packs_str = ' '.join([f"[{''.join(p)}]" for p in self.packs_output[w_idx]])
-            print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']}: {hand_str} {packs_str}")
+        # Fan vector
+        fan_vector = [0] * len(FAN_NAMES)
+        for fan_id_str, fan_val in fan_details.items():
+            fan_id = int(fan_id_str)
+            if 0 <= fan_id < len(FAN_NAMES):
+                count = (fan_val >> 8) + 1
+                fan_vector[fan_id] = count
 
-            print(f"{self.WIND[w_idx]}家 {self.script_data['p'][w_idx]['n']} 和牌! 总计: {total_fan}番 ({flower_str})")
-            for fan_points, count, fan_name_cn, fan_name_en in fans:
-                print(f"  {fan_name_cn}: {fan_points}番" + (f" x{count}" if count > 1 else ""))
-        except Exception as e:
-            print(f"算番时发生错误: {e}")
+        return {
+            "winner_name": self.script_data['p'][w_idx]['n'],
+            "base_fan": base_fan,
+            "flower_count": flower_count,
+            "total_fan": total_fan,
+            "formatted_hand": formatted_hand,
+            "fan_vector": fan_vector,
+            "fan_names": FAN_NAMES,
+            "winning_tile": win_tile_str,
+            "game_title": game_title
+        }
+
