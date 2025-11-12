@@ -1,39 +1,86 @@
-# English
-ChineseOfficialMahjongHelper provides function to calculate the combination of tiles in hand.
-It is forked from https://github.com/summerinsects/ChineseOfficialMahjongHelper.git
+# 雀渣牌谱统计 tziakcha_record_reader
 
-If you write AI in C++, please refer Mahjong-GB-CPP.
+本项目用于抓取并解析 tziakcha 平台的对局数据，生成便于分析与统计的本地数据与报表。核心功能包括：
+- 单条对局记录下载与解析（`main.py`）
+- 历史列表抓取（需要 Cookie）（`history.py`）
+- 根据历史列表筛选对局（`select_session.py`）
+- 将“场次”转为“具体对局记录ID列表”（`session.py`）
+- 批量下载并解析所有记录（`batch_process.py`）
+- 生成统计 CSV（可选，`generate_stats.py`）
 
-If you write AI in Python, please refer Mahjong-GB-Python.
+环境要求：Python 3.9+
 
-Note: We have already provided these libraries (fan calculators) in Botzone runtime, and you may just `from MahjongGB import MahjongFanCalculator` or `#include "MahjongGB/MahjongGB.h"` directly in your code to submit to Botzone.
-
-***For C++ fan calculator to work, please choose "G++ 7.2.0 with many lib" as compiler on Botzone.***
-
-OR
-
-If you'd rather use interfaces provided by https://github.com/summerinsects/ChineseOfficialMahjongHelper/tree/master/Classes/mahjong-algorithm , you may include cpp files as shown below (Please choose the default compiler on Botzone if this is the case):
-```
-#include "MahjongGB/fan_calculator.cpp"
-#include "MahjongGB/shanten.cpp"
+```bash
+pip install requests
 ```
 
-# 中文
-ChineseOfficialMahjongHelper文件夹为国标麻将算番器。此算番器接口调用开源项目：
-https://github.com/summerinsects/ChineseOfficialMahjongHelper.git
+## 快速开始
 
-C++请参阅Mahjong-GB-CPP
+### 1）抓取历史列表（需要登录 Cookie）
 
-Python请参阅Mahjong-GB-Python
+1. 登录 https://tziakcha.net/history/，抓取浏览器 Cookie。
+2. 将 Cookie 赋值给环境变量 `TZI_HISTORY_COOKIE`（只需包含服务端需要的 Cookie 串）。
 
-注：Botzone内置算番库，直接from MahjongGB import MahjongFanCalculator或者#include "MahjongGB/MahjongGB.h"就可以使用算番器。
-
-***如使用 C++ 的算番库，请在创建 Bot 时选择 "G++ 7.2.0 with many lib" 作为编译器。***
-
-或者
-
-如果你希望直接使用 https://github.com/summerinsects/ChineseOfficialMahjongHelper/tree/master/Classes/mahjong-algorithm 的接口，可以通过如下方式引入对应的文件（此时在 Botzone 上请使用默认编译器）：
+```bash
+export TZI_HISTORY_COOKIE='__p=[你的Cookie]'
+python history.py
 ```
-#include "MahjongGB/fan_calculator.cpp"
-#include "MahjongGB/shanten.cpp"
+
+运行成功后生成 `record_lists.json`，包含历史场次列表。
+
+### 2）筛选你关心的场次
+
+`select_session.py` 默认筛选标题中包含“竹”的场次：
+
+```bash
+python select_session.py
 ```
+
+生成 `selected.json`：形如 `[{"id": "<场次id>", "title": "..."}, ...]`
+
+若要自定义规则，直接修改 `select_session.py` 中的匹配条件（例如按时间、关键字、人数等）。
+
+### 3）将场次展开为具体对局记录ID
+
+`session.py` 会把每个场次展开为多条对局记录的小 id，并写入 `all_record.json`：
+
+```bash
+python session.py
+```
+
+生成：
+- `all_record.json`：`["PgTyUuSQ", "...", ...]`（小 id 列表）
+
+### 4）批量下载并解析所有记录
+
+```bash
+python batch_process.py
+```
+
+行为：
+- 若 `data/origin/<id>.json` 不存在则下载 `/record/?id=<id>` 的原始响应并保存到 `data/origin/`。
+- 调用 `parser.py` 解析脚本数据，保存到 `data/record/<id>.json`。
+- 同时在控制台输出对局过程与结果（和牌信息、花数校验等）。
+
+### 5）单条记录调试
+
+```bash
+python main.py <record_id>
+```
+
+行为：
+- 若本地无 `data/origin/<record_id>.json` 则自动下载并保存。
+- 解析并打印过程分析，便于逐条定位问题（吃/碰/杠/补花/和牌）。
+
+### 6）生成统计报表（可选）
+
+```bash
+python generate_stats.py
+```
+
+输出：
+- `win_stats.csv`（UTF‑8）
+- `win_stats_bom.csv`（UTF‑8‑BOM，Excel 友好）
+
+字段包含：
+- 和牌者、基础番、花牌数、总番、手牌+副露、和牌张、所属局等。
