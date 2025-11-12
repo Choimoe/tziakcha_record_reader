@@ -18,7 +18,7 @@ pip install requests
 
 ### 1）抓取历史列表（需要登录 Cookie）
 
-1. 登录 https://tziakcha.net/history/，抓取浏览器 Cookie。
+1. 登录 [雀渣官网](https://tziakcha.net/history/)，抓取浏览器 Cookie。
 2. 将 Cookie 赋值给环境变量 `TZI_HISTORY_COOKIE`（只需包含服务端需要的 Cookie 串）。
 
 ```bash
@@ -78,9 +78,4 @@ python main.py <record_id>
 python generate_stats.py
 ```
 
-输出：
-- `win_stats.csv`（UTF‑8）
-- `win_stats_bom.csv`（UTF‑8‑BOM，Excel 友好）
-
-字段包含：
-- 和牌者、基础番、花牌数、总番、手牌+副露、和牌张、所属局等。
+输出：`win_stats_bom.csv`（UTF‑8‑BOM，Excel 友好）
