@@ -57,11 +57,6 @@ def load_all_record_ids(json_file="all_record.json"):
     try:
         with open(json_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if isinstance(data, list):
-            return data
-        else:
-            print("Invalid format: expected a list of record IDs.", file=sys.stderr)
-            sys.exit(1)
     except FileNotFoundError:
         print(f"File not found: {json_file}", file=sys.stderr)
         sys.exit(1)
@@ -69,8 +64,27 @@ def load_all_record_ids(json_file="all_record.json"):
         print(f"Invalid JSON in {json_file}: {e}", file=sys.stderr)
         sys.exit(1)
 
+    if not isinstance(data, list):
+        print("Invalid format: top-level JSON must be a list.", file=sys.stderr)
+        sys.exit(1)
+
+    if data and isinstance(data[0], dict) and 'records' in data[0]:
+        flattened = []
+        for session_obj in data:
+            if not isinstance(session_obj, dict):
+                continue
+            recs = session_obj.get('records', [])
+            if isinstance(recs, list):
+                flattened.extend([r for r in recs if isinstance(r, str)])
+        return flattened
+
+    if all(isinstance(x, str) for x in data):
+        return data
+
+    print("Unrecognized all_record.json structure.", file=sys.stderr)
+    sys.exit(1)
+
 def main():
-    # 加载所有 record_id
     record_ids = load_all_record_ids("all_record.json")
 
     print(f"Found {len(record_ids)} records. Starting batch processing...")
@@ -81,7 +95,6 @@ def main():
     for i, record_id in enumerate(record_ids, start=1):
         print(f"\n\n[{i}/{len(record_ids)}] Processing record: https://tziakcha.net/record/?id={record_id}")
 
-        # 检查是否已存在本地 origin 文件
         origin_file = os.path.join("data", "origin", f"{record_id}.json")
         if not os.path.exists(origin_file):
             print(f"  Downloading {record_id}...")
