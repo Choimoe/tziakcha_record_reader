@@ -4,6 +4,7 @@ import sys
 import os
 import json
 import requests
+import csv
 from parser import MahjongRecordParser
 
 # ================== 从原 main.py 复用的代码 ==================
@@ -49,7 +50,27 @@ def process_record(record_id):
 
     # 执行分析（根据你的 parser 实现）
     parser.run_analysis()
-    return True
+    compare = parser.compute_gb_fan()
+    official_list = parser.get_official_fan_list()
+    gb_list = []
+    error = None
+    if compare:
+        gb_list = compare.get('node_detail', {}).get('fan_list', []) or []
+        error = compare.get('node_detail', {}).get('error')
+    return {
+        'record_id': record_id,
+        'winner_name': parser.win_info and parser.script_data['p'][parser.win_info['winner']]['n'] if parser.win_info else None,
+        'hand_string': compare and compare.get('hand_string'),
+        'env_flag': compare and compare.get('env_flag'),
+        'official_total_fan': compare and compare.get('official_total_fan'),
+        'official_base_fan': compare and compare.get('official_base_fan'),
+        'gb_total_fan': compare and compare.get('gb_total_fan'),
+        'gb_base_fan': compare and compare.get('gb_base_fan'),
+        'diff': compare and compare.get('diff'),
+        'official_fans': official_list,
+        'gb_fans': gb_list,
+        'error': error
+    }
 
 # ================== 批量处理逻辑 ==================
 
@@ -91,6 +112,7 @@ def main():
 
     suc_cnt = 0
     fail_cnt = 0
+    results = []
 
     for i, record_id in enumerate(record_ids, start=1):
         print(f"\n\n[{i}/{len(record_ids)}] Processing record: https://tziakcha.net/record/?id={record_id}")
@@ -109,14 +131,38 @@ def main():
         # 处理记录（解析 + 分析）
         
         try:
-            process_record(record_id)
-            # print(f"  ✅ Processed successfully.\n")
+            r = process_record(record_id)
+            if isinstance(r, dict) and r.get('diff') != 0:
+                results.append(r)
             suc_cnt += 1
         except Exception as e:
             print(f"  ❌ Error during processing {record_id}: {e}\n")
             fail_cnt += 1
 
     # print("✅ Batch processing completed.")
+    # 输出 CSV 与 JSON
+    out_dir = os.path.join('data')
+    os.makedirs(out_dir, exist_ok=True)
+    csv_file = os.path.join(out_dir, 'batch_compare.csv')
+    json_file = os.path.join(out_dir, 'batch_compare.json')
+    for r in results:
+        off_names = {f['name'] for f in r.get('official_fans', [])}
+        gb_names = {f.get('normalizedName') or f.get('name') for f in r.get('gb_fans', [])}
+        r['fans_only_official'] = sorted(list(off_names - gb_names))
+        r['fans_only_gb'] = sorted(list(gb_names - off_names))
+    fieldnames = ['record_id','winner_name','hand_string','env_flag','official_total_fan','official_base_fan','gb_total_fan','gb_base_fan','diff','fans_only_official','fans_only_gb','error']
+    try:
+        with open(csv_file,'w',newline='',encoding='utf-8') as f:
+            w = csv.DictWriter(f, fieldnames=fieldnames)
+            w.writeheader()
+            for r in results:
+                row = {k: r.get(k) for k in fieldnames}
+                w.writerow(row)
+        with open(json_file,'w',encoding='utf-8') as f:
+            json.dump(results,f,ensure_ascii=False,indent=2)
+        print(f"  Batch comparison written: {csv_file}, {json_file}")
+    except Exception as e:
+        print(f"  ❌ Failed writing comparison outputs: {e}")
     print(f"  Successfully processed: {suc_cnt}")
     print(f"  Failed to process: {fail_cnt}")
 
